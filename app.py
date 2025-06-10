@@ -74,6 +74,7 @@ def ask_question():
             assistant_id=ASSISTANT_ID
         )
 
+        print("Starting retrieve")
         while True:
             run_status = client.beta.threads.runs.retrieve(
                 thread_id=thread.id, run_id=run.id
@@ -83,6 +84,8 @@ def ask_question():
             elif run_status.status == "failed":
                 raise Exception("Run failed")
             time.sleep(1)
+
+        print("After retrieve", run_status.status)
 
         messages = client.beta.threads.messages.list(thread_id=thread.id)
         final_message = messages.data[0].content[0].text.value
