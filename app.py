@@ -3,8 +3,11 @@ import os
 import time
 import traceback
 from openai import OpenAI
+from flask_cors import CORS
+
 
 app = Flask(__name__)
+CORS(app)
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -40,18 +43,6 @@ def upload():
         traceback.print_exc()
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
-@app.route("/api/documents", methods=["GET"])
-def list_docs():
-    try:
-        vector_files = client.vector_stores.files.list(vector_store_id=VECTOR_STORE_ID)
-        documents = []
-        for vf in vector_files.data:
-            file_info = client.files.retrieve(vf.file_id)
-            documents.append({"file_id": vf.file_id, "name": file_info.filename})
-        return jsonify({"documents": documents})
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": f"Failed to retrieve documents: {str(e)}"}), 500
 
 @app.route("/api/ask", methods=["POST"])
 def ask_question():
