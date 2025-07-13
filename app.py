@@ -6,16 +6,56 @@ from openai import OpenAI
 from flask_cors import CORS
 import sys
 from flask import Response, stream_with_context
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 
 
 app = Flask(__name__)
 CORS(app)
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# OpenAI client
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Replace with your actual Vector Store ID and Assistant ID
 VECTOR_STORE_ID = "vs_6824f56c052081919f25de6844131737"
 ASSISTANT_ID = "asst_lY2FkYc4pSomJSDF0H8lLCFN"
+
+# MongoDB Atlas connection
+uri = "mongodb+srv://nakulshahdadpuri45:AsOAnjioznHUljC7@cluster0.iaimdcl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+mongo_client = MongoClient(uri, server_api=ServerApi('1'))
+db = mongo_client["omm"]
+
+
+# Inserting into MongoDB
+def insert_into_table(collection_name, document):
+    """
+    Inserts a document into the specified MongoDB collection.
+    :param collection_name: Name of the collection
+    :param document: Document to insert (dict)
+    """
+    try:
+        collection = db[collection_name]
+        collection.insert_one(document)
+        print(f"✅ Document inserted into '{collection_name}' collection.")
+    except Exception as e:
+        print(f"❌ Failed to insert document: {e}")
+
+
+def display_all_from_table(collection_name):
+    """
+    Displays all documents from the specified MongoDB collection.
+    :param collection_name: Name of the collection
+    """
+    try:
+        data = []
+        collection = db[collection_name]
+        print(f"\n📄 All Documents in '{collection_name}':")
+        for doc in collection.find({}, {"_id": 0}):  # Exclude `_id` field
+            data.append(doc)
+        return data
+    except Exception as e:
+        print(f"❌ Failed to fetch documents: {e}")
+
 
 UPLOADED_FILES = []
 
@@ -30,12 +70,15 @@ def upload():
 
     try:
         with open(temp_path, "rb") as f:
-            uploaded_file = client.vector_stores.files.upload_and_poll(
+            uploaded_file = openai_client.vector_stores.files.upload_and_poll(
                 vector_store_id=VECTOR_STORE_ID,
                 file=f
             )
         file_id = uploaded_file.id
-        UPLOADED_FILES.append({"file_id": file_id, "name": file.filename})
+
+        # Insert document into MongoDB
+        insert_into_table('document', {"file_id": file_id, "name": file.filename})
+
         return jsonify({
             "message": "File uploaded successfully",
             "file_name": file.filename,
@@ -55,21 +98,21 @@ def ask_question():
         return jsonify({"error": "Question cannot be empty"}), 400
 
     try:
-        thread = client.beta.threads.create()
-        client.beta.threads.messages.create(
+        thread = openai_client.beta.threads.create()
+        openai_client.beta.threads.messages.create(
             thread_id=thread.id,
             role="user",
             content=question
         )
 
-        run = client.beta.threads.runs.create(
+        run = openai_client.beta.threads.runs.create(
             thread_id=thread.id,
             assistant_id=ASSISTANT_ID
         )
 
         # Poll with timeout
         for _ in range(60):  # max 60 seconds
-            run_status = client.beta.threads.runs.retrieve(
+            run_status = openai_client.beta.threads.runs.retrieve(
                 thread_id=thread.id, run_id=run.id
             )
             if run_status.status == "completed":
@@ -81,8 +124,11 @@ def ask_question():
             raise TimeoutError("Run did not complete in time")
 
         # Fetch final response (only last message)
-        messages = client.beta.threads.messages.list(thread_id=thread.id, limit=1)
+        messages = openai_client.beta.threads.messages.list(thread_id=thread.id, limit=1)
         final_message = messages.data[0].content[0].text.value
+
+        # Insert conversation into MongoDB
+        insert_into_table('conversation_history', {"question": question, "answer": final_message})
 
         return jsonify({
             "text": final_message,
@@ -109,14 +155,9 @@ def ask_stream():
 @app.route("/get_document_list", methods=["GET"])
 def get_document_list():
     try:
-        # Sample document data
-        sample_documents = [
-            {"file_id": "file_123", "name": "example.txt"},
-            {"file_id": "file_456", "name": "report.pdf"},
-            {"file_id": "file_789", "name": "presentation.pptx"}
-        ]
+        documents = display_all_from_table('document')
         return jsonify({
-            "documents": sample_documents
+            "documents": documents
         })
     except Exception as e:
         traceback.print_exc()
@@ -126,14 +167,9 @@ def get_document_list():
 @app.route("/gethistorical", methods=["GET"])
 def get_historical():
     try:
-        # Sample historical conversation data
-        sample_historical_data = [
-            {"question": "What is AI?", "answer": "AI stands for Artificial Intelligence."},
-            {"question": "Explain machine learning.", "answer": "Machine learning is a subset of AI that involves training algorithms to learn patterns from data."},
-            {"question": "What is OpenAI?", "answer": "OpenAI is an AI research and deployment company."}
-        ]
+        history = display_all_from_table('conversation_history')
         return jsonify({
-            "history": sample_historical_data
+            "history": history
         })
     except Exception as e:
         traceback.print_exc()
