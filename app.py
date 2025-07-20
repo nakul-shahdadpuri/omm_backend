@@ -8,6 +8,7 @@ import sys
 from flask import Response, stream_with_context
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+import certifi
 
 
 app = Flask(__name__)
@@ -22,7 +23,7 @@ ASSISTANT_ID = "asst_lY2FkYc4pSomJSDF0H8lLCFN"
 
 # MongoDB Atlas connection
 uri = "mongodb+srv://nakulshahdadpuri45:AsOAnjioznHUljC7@cluster0.iaimdcl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-mongo_client = MongoClient(uri, ssl=True, server_api=ServerApi('1'))
+mongo_client = MongoClient(uri, tls=True, tlsCAFile=certifi.where(), server_api=ServerApi('1'))
 db = mongo_client["omm"]
 
 
