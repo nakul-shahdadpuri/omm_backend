@@ -26,6 +26,10 @@ uri = "mongodb+srv://nakulshahdadpuri45:AsOAnjioznHUljC7@cluster0.iaimdcl.mongod
 mongo_client = MongoClient(uri, tls=True, tlsCAFile=certifi.where(), server_api=ServerApi('1'))
 db = mongo_client["omm"]
 
+try:
+    print(db.list_collection_names())
+except Exception as e:
+    print("❌ Failed to connect:", e)
 
 # Inserting into MongoDB
 def insert_into_table(collection_name, document):
